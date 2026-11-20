@@ -38,7 +38,7 @@
                     "showLineNumbers": false,
                     "showMiniMap": false
                 },
-                "content": "## Inkomoko Executive Loan Analytics Dashboard\n\nThis executive dashboard provides strategic portfolio intelligence, loan disbursement metrics, and demographic capital allocation across micro-entrepreneur lending programs powered by ClickHouse OLAP and dbt transformations.\n\n#### Key Analytical Scopes:\n- **Portfolio Health & Capital Volume**: Live tracking of total capital disbursed, portfolio-wide funding fulfillment rate, and unique micro-entrepreneurs supported.\n- **Sectoral Exposure**: Breakdown of loan funding volume across key industries (Agriculture, Retail, Food, Services, etc.) to evaluate capital allocation.\n- **Geographical Footprint**: Country-level capital distribution identifying high-impact lending regions across East African corridors (Rwanda, Kenya, Uganda, etc.).",
+                "content": "## Kiva Executive Loan Analytics Dashboard\n\nThis executive dashboard provides strategic portfolio intelligence, loan disbursement metrics, and demographic capital allocation across micro-entrepreneur lending programs powered by ClickHouse OLAP and dbt transformations.\n\n#### Key Analytical Scopes:\n- **Portfolio Health & Capital Volume**: Live tracking of total capital disbursed, portfolio-wide funding fulfillment rate, and unique micro-entrepreneurs supported.\n- **Sectoral Exposure**: Breakdown of loan funding volume across key industries (Agriculture, Retail, Food, Services, etc.) to evaluate capital allocation.\n- **Geographical Footprint**: Country-level capital distribution identifying high-impact lending regions across East African corridors (Rwanda, Kenya, Uganda, etc.).",
                 "mode": "markdown"
             }
         },
@@ -392,7 +392,7 @@
         ]
     },
     "timezone": "browser",
-    "title": "Inkomoko Executive Loan Analytics",
+    "title": "Kiva Executive Loan Analytics",
     "uid": "exec_analytics",
     "version": 9
 }

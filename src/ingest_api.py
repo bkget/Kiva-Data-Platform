@@ -7,7 +7,7 @@ import requests
 
 # Logging (structured enough for Airflow task logs)
 formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s")
-logger = logging.getLogger("inkomoko_ingestion")
+logger = logging.getLogger("kiva_ingestion")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
     handler = logging.StreamHandler()
@@ -135,7 +135,7 @@ def upsert_loans(conn, loans):
 
 
 def main():
-    logger.info("Starting Inkomoko Data Ingestion Job... (pages=%s, per_page=%s)",
+    logger.info("Starting Kiva Data Ingestion Job... (pages=%s, per_page=%s)",
                 KIVA_PAGES, KIVA_PER_PAGE)
     conn = get_db_connection()
 

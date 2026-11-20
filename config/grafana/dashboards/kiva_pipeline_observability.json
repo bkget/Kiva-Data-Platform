@@ -36,7 +36,7 @@
                     "showLineNumbers": false,
                     "showMiniMap": false
                 },
-                "content": "## Inkomoko CDC & Pipeline Observability Dashboard\n\nThis operational dashboard provides real-time health monitoring, CDC synchronization tracking, and infrastructure performance metrics across the entire Inkomoko Data Platform.\n\n#### Key Monitoring Scopes:\n- **Change Data Capture (CDC) Integrity**: Real-time cross-database row count reconciliation between **PostgreSQL (OLTP)** and **ClickHouse (OLAP)** via `cdc-monitor`.\n- **Infrastructure Performance**: Network throughput for **Redpanda (Kafka streaming)** and memory utilization tracking for **ClickHouse**.\n- **Connector & Service Status**: Live status tracking for Debezium Kafka Connect workers and Postgres Exporter scrape endpoints.",
+                "content": "## Kiva CDC & Pipeline Observability Dashboard\n\nThis operational dashboard provides real-time health monitoring, CDC synchronization tracking, and infrastructure performance metrics across the entire Kiva Data Platform.\n\n#### Key Monitoring Scopes:\n- **Change Data Capture (CDC) Integrity**: Real-time cross-database row count reconciliation between **PostgreSQL (OLTP)** and **ClickHouse (OLAP)** via `cdc-monitor`.\n- **Infrastructure Performance**: Network throughput for **Redpanda (Kafka streaming)** and memory utilization tracking for **ClickHouse**.\n- **Connector & Service Status**: Live status tracking for Debezium Kafka Connect workers and Postgres Exporter scrape endpoints.",
                 "mode": "markdown"
             },
             "pluginVersion": "13.0.2",
@@ -1327,7 +1327,7 @@
         ]
     },
     "timezone": "browser",
-    "title": "Inkomoko Pipeline Observability",
+    "title": "Kiva Pipeline Observability",
     "uid": "adt54j4",
     "version": 12
 }

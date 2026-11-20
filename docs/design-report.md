@@ -1,13 +1,13 @@
-# Design Report - Inkomoko Data Platform
+# Design Report - Kiva Data Platform
 
-This is the design report deliverable: architecture, data flow, schema/ERD with
+This document covers the platform's architecture, data flow, schema/ERD with
 ClickHouse-specific rationale, observability design, and a scaling plan. It is
 meant to be read alongside [`README.md`](../README.md) (how to run it) and
 [`observability.md`](./observability.md) (monitoring detail).
 
 ## 1. Architecture
 
-![Inkomoko Data Platform Architecture](../architecture.png)
+![Kiva Data Platform Architecture](../architecture.png)
 
 The diagram above illustrates the complete end-to-end data platform architecture, capturing data sourcing, OLTP ingestion, logical CDC replication, Redpanda event streaming, ClickHouse OLAP with dbt modeling, Apache Airflow orchestration, and full-stack Prometheus & Grafana observability.
 
@@ -196,8 +196,7 @@ Full detail lives in [`observability.md`](./observability.md); summary:
 - **Tools**: Prometheus (pull-based scraping, zero external DB dependency) +
   Grafana (dashboards *and* provisioned alert rules) - chosen over a SaaS
   APM because everything needed to run entirely inside `docker compose` with
-  no external account/API key, matching the "single command, self-contained"
-  requirement.
+  no external account/API key, matching a single-command, self-contained deployment model.
 - **Alerting**: four Grafana-provisioned alert rules catch the failure modes
   most specific to a CDC pipeline - connector down, replication lag, row-count
   drift, and ingestion stalls - see §5.4 of `observability.md`.
@@ -207,7 +206,7 @@ Full detail lives in [`observability.md`](./observability.md); summary:
 The current build targets **demo scale**: hundreds of rows per ingestion run,
 single-node everything, resource-capped containers for a laptop. Below is what
 changes at each order of magnitude, and why - this is the "how would you scale
-this" answer the assessment asks for, made concrete instead of abstract.
+this" question, made concrete instead of abstract.
 
 | Volume tier | What breaks first | What changes |
 |---|---|---|
@@ -216,18 +215,16 @@ this" answer the assessment asks for, made concrete instead of abstract.
 | **10⁶–10⁸ rows/day / multiple OLTP sources** | Single Redpanda broker and single-node ClickHouse become the bottleneck; Debezium `tasks.max: 1` can't keep up with WAL volume. | Move to **Apache Kafka** with multiple partitions per topic (Redpanda was chosen here purely to avoid the JVM footprint on a laptop - see `README.md` → Design Decisions); scale Debezium connector tasks per table; move to a **ClickHouse cluster** (sharded + replicated) with `Distributed` engine tables; introduce a schema registry (Avro/Protobuf) instead of raw JSON to catch upstream schema drift before it reaches ClickHouse. |
 | **Enterprise / multi-team** | A single standalone Airflow instance and a single `dbt` project become an operational and ownership bottleneck. | Scale orchestration to distributed **Apache Airflow** on Kubernetes (`KubernetesExecutor` / `CeleryExecutor`) with isolated worker pools and dedicated team queues; split the dbt project by domain with `dbt mesh`/multi-project `dbt-core` patterns; adopt **dbt Fusion** (Rust engine) for compile-time performance on a much larger DAG; add a proper data catalog / lineage tool (e.g. OpenLineage) since `cdc-monitor`'s reconciliation approach stops being sufficient once there are many source tables instead of one. |
 
-## 6. Beyond the Brief
+## 6. Reliability & Operability Hardening
 
-The assessment's core requirements are all met (see the compliance checklist
-in the PR/commit history), but the following were added specifically to close
-gaps a careful reviewer would notice, and to demonstrate production judgment
-rather than just a working demo:
+Beyond the core pipeline, the following were added to close operational gaps
+and bring the platform closer to production standards than a working demo:
 
 1. **True single-command startup.** The original design required a manual
    `curl` to register the Debezium connector after `docker compose up`. The
    `connector-registrar` service now does this automatically, idempotently,
    and with credentials rendered from `.env` at boot time (not hardcoded) -
-   so `docker compose up -d` alone is sufficient, as required.
+   so `docker compose up -d` alone is sufficient.
 2. **Real CDC observability, not just infrastructure metrics.** Redpanda/
    ClickHouse "system is up" metrics don't answer "did every row actually
    arrive?". `cdc-monitor` (`src/cdc_monitor.py`) directly reconciles Postgres
@@ -237,14 +234,13 @@ rather than just a working demo:
    of any live service (`tests/test_cdc_monitor.py`).
 3. **Proactive alerting, not just dashboards.** Four Grafana alert rules
    (connector down, replication lag, row drift, ingestion stall) are
-   provisioned as code, directly satisfying the "enabling proactive issue
-   detection" language in the assessment's observability requirement.
+   provisioned as code, enabling proactive issue detection.
 4. **A genuine CI/CD integration test, not a syntax check.** Beyond linting
    and `dbt parse`, the CI pipeline now stands up the real Postgres → Debezium
    → Redpanda → ClickHouse chain, runs the actual ingestion script, waits for
    CDC replication to be observed, and runs `dbt run`/`dbt test` against a
    live warehouse - so a model or connector config that's syntactically valid
-   but functionally broken fails CI, not a reviewer's laptop.
+   but functionally broken fails CI, not a developer's laptop.
 5. **A pre-existing bug fixed along the way.** While wiring up the new alert
    rules, the Grafana ClickHouse datasource had no explicit `uid`, but the
    "Executive Analytics" dashboard hardcoded a `uid` captured from a prior
@@ -252,7 +248,7 @@ rather than just a working demo:
    panel in that dashboard ("datasource not found"). Both datasources now
    have explicit, stable `uid`s (`prometheus`, `clickhouse`) referenced
    consistently across all provisioned dashboards and alert rules.
-6. **Browsable dbt documentation.** The `dbt` service generates and serves the documentation site on `http://localhost:8081`, giving reviewers an interactive lineage graph and column-level catalog instead of only static markdown. Regenerating docs after a `dbt run` (`make dbt-run` / `make dbt-docs`) refreshes the served site with no restart.
+6. **Browsable dbt documentation.** The `dbt` service generates and serves the documentation site on `http://localhost:8081`, giving users an interactive lineage graph and column-level catalog instead of only static markdown. Regenerating docs after a `dbt run` (`make dbt-run` / `make dbt-docs`) refreshes the served site with no restart.
 7. **Grafana OOM fixed at the root cause, not papered over -- including a
    regression caught and fixed in the same investigation.** After adding
    unified alerting, Grafana started getting silently killed by Docker
@@ -295,13 +291,13 @@ rather than just a working demo:
    (`config/grafana/provisioning/alerting/contact-points.yml`,
    `notification-policies.yml`) instead of leaving that as UI-only manual
    setup. Verified with a real fault injection, not a synthetic test button:
-   `docker stop inkomoko_debezium` was used to genuinely break the
+   `docker stop kiva_debezium` was used to genuinely break the
    connector, and the full pipeline was observed end-to-end --
    `debezium_connector_state` metric flipping to `0` within one
    `cdc-monitor` poll cycle, the rule transitioning `inactive` -> `pending`
    -> `firing` on schedule, a `[FIRING:1] Debezium connector is not RUNNING`
    email landing in Mailpit with correct sender/recipient/body, and, after
-   `docker start inkomoko_debezium`, a `[RESOLVED]` email arriving once the
+   `docker start kiva_debezium`, a `[RESOLVED]` email arriving once the
    notification policy's `group_interval` (5m) elapsed. The same fault also
    organically triggered the CDC replication-lag alert (a real consequence
    of no fresh data flowing during the outage), confirming that alert too --

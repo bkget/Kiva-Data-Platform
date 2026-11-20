@@ -1,7 +1,7 @@
 #!/bin/sh
 # Registers (or re-registers) the Debezium PostgreSQL connector against Kafka Connect.
 # Runs as a one-shot init container so the whole stack can be brought up with a single
-# `docker compose up -d` — no manual curl step required by the reviewer.
+# `docker compose up -d` — no manual curl step required.
 set -eu
 
 CONNECT_URL="${DEBEZIUM_URL:-http://debezium:8083}"

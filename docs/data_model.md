@@ -2,7 +2,7 @@
 
 ## 1. Overview & Data Layering Architecture
 
-The Inkomoko Data Platform follows the modern **Medallion Data Architecture** tailored for high-performance ClickHouse OLAP analytics and real-time Change Data Capture (CDC).
+The Kiva Data Platform follows the modern **Medallion Data Architecture** tailored for high-performance ClickHouse OLAP analytics and real-time Change Data Capture (CDC).
 
 ```
 PostgreSQL (OLTP) ➔ Debezium CDC ➔ Redpanda (Kafka) ➔ ClickHouse MV ➔ Staging ➔ Marts / ML Store

@@ -1,7 +1,9 @@
-# Inkomoko Data Platform
+# Kiva Data Platform
+
+**A Real-Time CDC & Analytics Data Platform for Kiva microfinance lending data.**
 
 ## Architecture Overview
-This repository contains a production-grade, end-to-end data analytics platform designed for the Inkomoko setup. 
+This repository contains a production-grade, end-to-end data analytics platform built around the public Kiva microfinance loan dataset. 
 
 The architecture simulates a modern, resilient, and highly scalable data stack capable of handling real-time streaming and massive analytical workloads, while being extremely conscious of hardware resource limitations.
 
@@ -15,7 +17,7 @@ The architecture simulates a modern, resilient, and highly scalable data stack c
 7. **Observability:** **Prometheus & Grafana**, scraping Redpanda, ClickHouse, Postgres (`postgres-exporter`), and a custom **`cdc-monitor`** exporter that reconciles Postgres/ClickHouse row counts and measures real CDC replication lag - plus 5 provisioned Grafana alert rules.
 
 ### Architecture Flow
-![Inkomoko Data Platform Architecture](./architecture.png)
+![Kiva Data Platform Architecture](./architecture.png)
 
 The diagram above shows the core data path. See [`docs/design-report.md`](./docs/design-report.md) for the full current-state architecture diagram (including the observability/reliability additions), the ERD/schema documentation with ClickHouse design rationale, and the scaling plan.
 
@@ -34,7 +36,7 @@ The diagram above shows the core data path. See [`docs/design-report.md`](./docs
 ## Future Scalability
 If deploying this to an Enterprise Cloud environment (e.g., GCP or AWS) at massive scale, the architecture would evolve to ensure maximum resilience and throughput:
 1. **Distributed Airflow on Kubernetes:** The lightweight standalone Airflow instance would scale to `KubernetesExecutor` with dynamic worker pods, dedicated task queues, and team-isolated namespaces.
-2. **Replacing Redpanda with Apache Kafka:** Redpanda was utilized for this local assessment to bypass JVM constraints, but considering the overload and stability requirements of a true production environment, I will use **Apache Kafka** in place of Redpanda. Kafka remains the battle-tested, enterprise standard for streaming data at immense scale.
+2. **Replacing Redpanda with Apache Kafka:** Redpanda is used in this local deployment to avoid JVM overhead, but for the load and stability requirements of a true production environment, **Apache Kafka** would replace it. Kafka remains the battle-tested, enterprise standard for streaming data at immense scale.
 3. **dbt Fusion (Rust Engine):** Upgrading the transformation layer from the legacy Python-based `dbt-core` to the new Rust-based **dbt Fusion** execution engine. This would massively reduce DAG compilation times and memory overhead for projects with thousands of models.
 
 ---
@@ -45,7 +47,7 @@ This platform ingests and processes live micro-finance loan data fetched directl
 **Authentication:** none required. Kiva's `/v1/loans/search.json` endpoint is fully public and read-only - no API key, token, or account registration is needed. The only special handling required is a standard browser `User-Agent` header (see `src/ingest_api.py`), since Kiva's WAF blocks requests carrying the default Python `requests` signature.
 
 ### Why Kiva Data?
-Kiva is a global micro-lending platform that provides loan capital to entrepreneurs and small business owners in developing regions. This domain was deliberately chosen because it directly mirrors **Inkomoko's core mission** of empowering refugee entrepreneurs and micro-businesses across East Africa with financial access, business training, and loan capital.
+Kiva is a global micro-lending platform that provides loan capital to entrepreneurs and small business owners in developing regions. Loan-level data of this kind supports portfolio analytics (sector and geography exposure, funding progress, loan-size distributions) and ML feature engineering for credit and funding-velocity models, which makes it a realistic fit for a streaming CDC and OLAP architecture.
 
 ### Schema & Core Attributes:
 The pipeline ingests real-time transactional loan records with the following schema:
@@ -74,7 +76,7 @@ The platform includes a production-grade `Makefile` that handles environment con
 
 ```bash
 make up       # 1. Auto-initializes .env, boots all 15 services, & prints all URLs
-make urls     # 2. Displays the complete reviewer dashboard with URLs and credentials
+make urls     # 2. Displays all service endpoints with URLs and credentials
 make verify   # 3. Automatically validates all 6 stages of the data pipeline end-to-end
 make ps       # 4. Lists all active & inactive containers with healthcheck statuses
 make help     # 5. Interactive menu with all lifecycle, database, and debugging targets
@@ -111,7 +113,7 @@ The platform provides dedicated `make` targets to inspect, stop, and wipe contai
 
 ### 2. Run the Orchestration Pipeline (Apache Airflow)
 Open your browser and navigate to **[http://localhost:8088](http://localhost:8088)** *(Credentials are configured via `.env` — `AIRFLOW_WEB_USER` / `AIRFLOW_WEB_PASSWORD`)*.
-1. Locate the DAG named **`inkomoko_kiva_pipeline`**.
+1. Locate the DAG named **`kiva_cdc_pipeline`**.
 2. Unpause the DAG (toggle to ON) or click the **Trigger DAG** (▶) button to execute the full pipeline immediately.
 *(Alternatively, trigger it directly from the terminal via `make airflow-run`).*
 
@@ -123,7 +125,7 @@ Open your browser and navigate to **[http://localhost:8088](http://localhost:808
 5. Airflow runs `dbt test` to enforce data quality constraints (Unique IDs, Non-Null values, Accepted Statuses).
 6. Airflow runs `dbt source freshness` to enforce the staging-source freshness thresholds (`warn_after 15m` / `error_after 30m` in `dbt_project/models/staging/src_kiva.yml`).
 
-It also runs unattended every 15 minutes (`*/15 * * * *`, defined in `airflow_dag/inkomoko_kiva_pipeline.py`) once the Airflow container is up - frequent enough to keep the Kiva loan data close to real-time without hammering a free public API or forcing needlessly frequent full-refresh dbt rebuilds. The CDC path itself (Postgres → Debezium → Redpanda → ClickHouse) is already near-real-time independent of this schedule; the 15-minute cadence only controls how often we poll Kiva for new external data.
+It also runs unattended every 15 minutes (`*/15 * * * *`, defined in `airflow_dag/kiva_cdc_pipeline.py`) once the Airflow container is up - frequent enough to keep the Kiva loan data close to real-time without hammering a free public API or forcing needlessly frequent full-refresh dbt rebuilds. The CDC path itself (Postgres → Debezium → Redpanda → ClickHouse) is already near-real-time independent of this schedule; the 15-minute cadence only controls how often we poll Kiva for new external data.
 
 The per-run backfill depth is tunable via `.env` (wired end-to-end into the Airflow container and the ingest task): `KIVA_PAGES` (how many pages to pull) and `KIVA_PER_PAGE` (records per page) - defaulting to 3 × 100 = 300 loans per run.
 
@@ -135,33 +137,33 @@ Check each stage independently, in order:
 
 **1. Ingestion landed in Postgres:**
 ```bash
-docker exec -it inkomoko_postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} \
+docker exec -it kiva_postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} \
   -c "SELECT COUNT(*), MAX(updated_at) FROM raw_data.kiva_loans;"
 ```
 
 **2. CDC events reached the Redpanda topic:**
 ```bash
-docker exec -it inkomoko_redpanda rpk topic consume cdc.raw_data.kiva_loans --num 3
+docker exec -it kiva_redpanda rpk topic consume cdc.raw_data.kiva_loans --num 3
 ```
 or browse visually via **Redpanda Console** at [http://localhost:8080](http://localhost:8080).
 
 **3. Debezium connector is healthy:**
 ```bash
-curl -s http://localhost:8083/connectors/inkomoko-postgres-connector/status | python -m json.tool
+curl -s http://localhost:8083/connectors/kiva-postgres-connector/status | python -m json.tool
 ```
 or via **Debezium UI** at [http://localhost:8084](http://localhost:8084).
 
 **4. Data landed in ClickHouse (raw CDC table):**
 ```bash
-docker exec -it inkomoko_clickhouse clickhouse-client \
+docker exec -it kiva_clickhouse clickhouse-client \
   --query "SELECT COUNT(*) FROM raw_data.kiva_loans_raw FINAL WHERE is_deleted = 0"
 ```
 
 **5. dbt models built successfully (staging → marts):**
 ```bash
-docker exec -it inkomoko_clickhouse clickhouse-client \
+docker exec -it kiva_clickhouse clickhouse-client \
   --query "SELECT COUNT(*) FROM analytics.mart_loans_by_sector"
-docker exec -it inkomoko_clickhouse clickhouse-client \
+docker exec -it kiva_clickhouse clickhouse-client \
   --query "SELECT COUNT(*) FROM analytics.mart_loan_features_ml"
 ```
 Or browse the generated docs/lineage graph at **dbt-docs** (served by the `dbt` service): [http://localhost:8081](http://localhost:8081).
@@ -170,16 +172,16 @@ Or browse the generated docs/lineage graph at **dbt-docs** (served by the `dbt` 
 ```bash
 curl -s http://localhost:9200/metrics | grep -E "cdc_row_count_drift|cdc_replication_lag_seconds|ingestion_last_activity"
 ```
-`cdc_row_count_drift` should trend toward `0`, `cdc_replication_lag_seconds` should stay low (single-digit to low-double-digit seconds) once the pipeline is idle, and `ingestion_last_activity_timestamp_seconds` should track the most recent Kiva ingestion run. All three are also plotted/live on the **Inkomoko Pipeline Observability** Grafana dashboard (ingestion activity powers the `kiva-ingestion-stalled` alert).
+`cdc_row_count_drift` should trend toward `0`, `cdc_replication_lag_seconds` should stay low (single-digit to low-double-digit seconds) once the pipeline is idle, and `ingestion_last_activity_timestamp_seconds` should track the most recent Kiva ingestion run. All three are also plotted/live on the **Kiva Pipeline Observability** Grafana dashboard (ingestion activity powers the `kiva-ingestion-stalled` alert).
 
 ---
 
 ## Observability & Business Dashboards
-* **Grafana Dashboards:** http://localhost:3001 (`admin` / `inkomoko`)
-  - **Inkomoko Pipeline Observability:** operational metrics - Redpanda throughput, ClickHouse memory/queries/write ops, Postgres-vs-ClickHouse row reconciliation, CDC replication lag, Debezium connector state, Postgres exporter status.
-  - **Inkomoko Executive Loan Analytics:** business intelligence & ML feature distributions querying the ClickHouse marts directly.
+* **Grafana Dashboards:** http://localhost:3001 (credentials set via `GF_SECURITY_ADMIN_USER` / `GF_SECURITY_ADMIN_PASSWORD` in `.env`)
+  - **Kiva Pipeline Observability:** operational metrics - Redpanda throughput, ClickHouse memory/queries/write ops, Postgres-vs-ClickHouse row reconciliation, CDC replication lag, Debezium connector state, Postgres exporter status.
+  - **Kiva Executive Loan Analytics:** business intelligence & ML feature distributions querying the ClickHouse marts directly.
 * **Grafana Alerting:** http://localhost:3001/alerting/list - 5 provisioned rules (CDC row drift, CDC replication lag, Debezium connector down, ClickHouse ingestion stalled, Kiva ingestion stalled), routed by a provisioned notification policy to a real email contact point. See [`docs/observability.md`](./docs/observability.md) for the full design and rationale.
-* **Alert emails:** captured by **Mailpit** at http://localhost:8025 (a local SMTP catcher - no real credentials needed to see alerting work end-to-end). To manually trigger one: `docker stop inkomoko_debezium`, wait ~2-3 minutes for the `debezium-connector-down` rule to fire, check the email at localhost:8025, then `docker start inkomoko_debezium` to resolve it. See [`docs/observability.md`](./docs/observability.md#3-alerting) for the full walkthrough, including how to point this at a real mailbox instead.
+* **Alert emails:** captured by **Mailpit** at http://localhost:8025 (a local SMTP catcher - no real credentials needed to see alerting work end-to-end). To manually trigger one: `docker stop kiva_debezium`, wait ~2-3 minutes for the `debezium-connector-down` rule to fire, check the email at localhost:8025, then `docker start kiva_debezium` to resolve it. See [`docs/observability.md`](./docs/observability.md#3-alerting) for the full walkthrough, including how to point this at a real mailbox instead.
 * **Prometheus Targets:** http://localhost:9090/targets - `redpanda`, `clickhouse`, `postgres-exporter`, `cdc-monitor`.
 
 ---

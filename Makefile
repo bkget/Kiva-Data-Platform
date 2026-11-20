@@ -1,5 +1,5 @@
 # ==============================================================================
-# Inkomoko Data Platform - Production-Grade Management Makefile
+# Kiva Data Platform - Production-Grade Management Makefile
 # ==============================================================================
 # Provides unified commands for deploying, inspecting, testing, and managing
 # the complete real-time CDC, OLAP, and Observability stack.
@@ -65,13 +65,13 @@ endef
 .PHONY: help
 help: ## Show this interactive help dashboard with command explanations
 	@echo -e "\n$(BOLD)$(CYAN)==============================================================================$(RESET)"
-	@echo -e "$(BOLD)$(WHITE)  Inkomoko Data Platform - Engineering & Deployment Makefile$(RESET)"
+	@echo -e "$(BOLD)$(WHITE)  Kiva Data Platform - Engineering & Deployment Makefile$(RESET)"
 	@echo -e "$(BOLD)$(CYAN)==============================================================================$(RESET)"
 	@echo -e "$(DIM)Usage: make <target> [variable=value]$(RESET)"
 	@awk 'BEGIN {FS = ":.*##"; printf ""} \
 		/^[a-zA-Z_ -]+:.*?##/ { printf "  $(BOLD)$(CYAN)%-22s$(RESET) %s\n", $$1, $$2 } \
 		/^##@/ { printf "\n$(BOLD)$(YELLOW)%s$(RESET)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
-	@echo -e "\n$(BOLD)$(MAGENTA)Quickstart for Reviewers:$(RESET)"
+	@echo -e "\n$(BOLD)$(MAGENTA)Quickstart:$(RESET)"
 	@echo -e "  $(BOLD)1.$(RESET) $(CYAN)make up$(RESET)       -> Boots the full 15-service platform & reveals all URLs"
 	@echo -e "  $(BOLD)2.$(RESET) $(CYAN)make urls$(RESET)     -> Displays all web interfaces, endpoints, and credentials"
 	@echo -e "  $(BOLD)3.$(RESET) $(CYAN)make verify$(RESET)   -> Automatically checks all 6 stages of the data pipeline"
@@ -80,12 +80,12 @@ help: ## Show this interactive help dashboard with command explanations
 	@echo -e "  $(BOLD)6.$(RESET) $(CYAN)make down$(RESET)     -> Stops and removes all containers & networks safely"
 	@echo -e "  $(BOLD)7.$(RESET) $(CYAN)make clear$(RESET)    -> Wipes all containers, database volumes, and caches\n"
 
-##@ Reviewer Access & Documentation
+##@ Access & Documentation
 .PHONY: urls endpoints info
 urls endpoints info: ## Display a publication-grade table of all UI endpoints and credentials
 	@test -n "$(GRAFANA_USER)" -a -n "$(GRAFANA_PASS)" -a -n "$(AIRFLOW_WEB_USER)" || { echo -e "$(RED)[!] Required credentials not set - run \`make up\` to create .env$(RESET)"; exit 1; }
 	@echo -e "\n$(BOLD)$(CYAN)====================================================================================================$(RESET)"
-	@echo -e "$(BOLD)$(WHITE)                                  INKOMOKO DATA PLATFORM ENDPOINTS                                  $(RESET)"
+	@echo -e "$(BOLD)$(WHITE)                                    KIVA DATA PLATFORM   ENDPOINTS                                  $(RESET)"
 	@echo -e "$(BOLD)$(CYAN)====================================================================================================$(RESET)"
 	@printf "$(BOLD) %-32s %-26s %-38s$(RESET)\n" "SERVICE / COMPONENT" "URL / HOST PORT" "AUTHENTICATION / NOTES"
 	@echo -e "$(CYAN)----------------------------------------------------------------------------------------------------$(RESET)"
@@ -124,20 +124,27 @@ init env: ## Ensure .env file is initialized from .env.example
 
 .PHONY: up start
 up start: init ## Start the entire 15-service platform in detached mode and print URLs
-	@echo -e "$(BOLD)$(CYAN)[*] Launching Inkomoko Data Platform via Docker Compose...$(RESET)"
+	@echo -e "$(BOLD)$(CYAN)[*] Launching Kiva Data Platform via Docker Compose...$(RESET)"
 	@docker compose up -d
 	@echo -e "$(BOLD)$(GREEN)[✓] All services dispatched successfully!$(RESET)"
+	@echo -e "$(CYAN)[*] Waiting for the Airflow UI (first boot can take 1-3 minutes)...$(RESET)"
+	@i=0; until curl -sf http://localhost:8088/health > /dev/null 2>&1; do \
+		i=$$((i+5)); \
+		if [ $$i -ge 300 ]; then echo -e "$(YELLOW)[!] Airflow not ready yet - check: docker logs kiva_airflow$(RESET)"; break; fi; \
+		sleep 5; \
+	done; \
+	if curl -sf http://localhost:8088/health > /dev/null 2>&1; then echo -e "$(GREEN)[✓] Airflow UI is ready.$(RESET)"; fi
 	@$(MAKE) --no-print-directory urls
 
 .PHONY: stop
 stop: ## Stop active running containers without removing them
-	@echo -e "$(YELLOW)[*] Stopping active Inkomoko containers...$(RESET)"
+	@echo -e "$(YELLOW)[*] Stopping active Kiva containers...$(RESET)"
 	@docker compose stop
 	@echo -e "$(GREEN)[✓] Active containers stopped.$(RESET)"
 
 .PHONY: down
 down: ## Stop and remove all running containers and networks
-	@echo -e "$(YELLOW)[*] Tearing down Inkomoko stack (stopping & removing containers)...$(RESET)"
+	@echo -e "$(YELLOW)[*] Tearing down Kiva stack (stopping & removing containers)...$(RESET)"
 	@docker compose down
 	@echo -e "$(GREEN)[✓] Stack stopped and removed successfully.$(RESET)"
 
@@ -174,7 +181,8 @@ clean clear: ## Clear containers, remove named volumes, networks, and local buil
 		fi; \
 	fi; \
 	docker compose down -v --remove-orphans; \
-	rm -rf dbt_project/target dbt_project/dbt_packages; \
+	rm -rf dbt_project/target dbt_project/dbt_packages dbt_project/logs 2>/dev/null || \
+		docker run --rm -v "$$PWD/dbt_project:/w" alpine:3.20 sh -c 'rm -rf /w/target /w/dbt_packages /w/logs'; \
 	echo -e "$(GREEN)[✓] Clear completed. Database volumes and containers removed.$(RESET)"
 
 .PHONY: reset
@@ -187,24 +195,24 @@ verify health: ## Automatically validate all 6 stages of the data pipeline end-t
 	@echo -e "$(BOLD)$(WHITE)            STARTING END-TO-END DATA PIPELINE VERIFICATION                    $(RESET)"
 	@echo -e "$(BOLD)$(CYAN)==============================================================================$(RESET)\n"
 	@echo -e "$(BOLD)[Stage 1/6] Validating PostgreSQL OLTP Table...$(RESET)"
-	@docker exec inkomoko_postgres psql -U $(PG_USER) -d $(PG_DB) -t -c \
+	@docker exec kiva_postgres psql -U $(PG_USER) -d $(PG_DB) -t -c \
 		"SELECT '  [✓] PostgreSQL contains ' || COUNT(*) || ' loans (Max updated_at: ' || MAX(updated_at) || ')' FROM raw_data.kiva_loans;"
 	@echo -e "\n$(BOLD)[Stage 2/6] Validating Redpanda Streaming Topic...$(RESET)"
-	@docker exec inkomoko_redpanda rpk topic describe cdc.raw_data.kiva_loans > /dev/null 2>&1 && \
+	@docker exec kiva_redpanda rpk topic describe cdc.raw_data.kiva_loans > /dev/null 2>&1 && \
 		echo -e "  $(GREEN)[✓] Topic 'cdc.raw_data.kiva_loans' exists and is active.$(RESET)" || \
 		echo -e "  $(RED)[✗] Topic 'cdc.raw_data.kiva_loans' not found.$(RESET)"
 	@echo -e "\n$(BOLD)[Stage 3/6] Validating Debezium CDC Connector State...$(RESET)"
-	@docker exec inkomoko_debezium curl -sf http://localhost:8083/connectors/inkomoko-postgres-connector/status > /dev/null 2>&1 && \
-		echo -e "  $(GREEN)[✓] Connector 'inkomoko-postgres-connector' is in RUNNING state.$(RESET)" || \
+	@docker exec kiva_debezium curl -sf http://localhost:8083/connectors/kiva-postgres-connector/status > /dev/null 2>&1 && \
+		echo -e "  $(GREEN)[✓] Connector 'kiva-postgres-connector' is in RUNNING state.$(RESET)" || \
 		echo -e "  $(RED)[✗] Connector failed or still initializing.$(RESET)"
 	@echo -e "\n$(BOLD)[Stage 4/6] Validating ClickHouse Raw Ingest (ReplacingMergeTree)...$(RESET)"
-	@CH_RAW_COUNT=$$(docker exec inkomoko_clickhouse clickhouse-client --user $(CH_USER) --password $(CH_PASS) --query \
+	@CH_RAW_COUNT=$$(docker exec kiva_clickhouse clickhouse-client --user $(CH_USER) --password $(CH_PASS) --query \
 		"SELECT COUNT(*) FROM raw_data.kiva_loans_raw FINAL WHERE is_deleted = 0" 2>/dev/null || echo "0"); \
 		echo -e "  $(GREEN)[✓] ClickHouse raw table contains $$CH_RAW_COUNT active deduplicated loans.$(RESET)"
 	@echo -e "\n$(BOLD)[Stage 5/6] Validating ClickHouse Analytical Marts (dbt)...$(RESET)"
-	@SECTOR_COUNT=$$(docker exec inkomoko_clickhouse clickhouse-client --user $(CH_USER) --password $(CH_PASS) --query \
+	@SECTOR_COUNT=$$(docker exec kiva_clickhouse clickhouse-client --user $(CH_USER) --password $(CH_PASS) --query \
 		"SELECT COUNT(*) FROM analytics.mart_loans_by_sector" 2>/dev/null || echo "0"); \
-	ML_COUNT=$$(docker exec inkomoko_clickhouse clickhouse-client --user $(CH_USER) --password $(CH_PASS) --query \
+	ML_COUNT=$$(docker exec kiva_clickhouse clickhouse-client --user $(CH_USER) --password $(CH_PASS) --query \
 		"SELECT COUNT(*) FROM analytics.mart_loan_features_ml" 2>/dev/null || echo "0"); \
 		echo -e "  $(GREEN)[✓] analytics.mart_loans_by_sector contains $$SECTOR_COUNT aggregate rows.$(RESET)"; \
 		echo -e "  $(GREEN)[✓] analytics.mart_loan_features_ml contains $$ML_COUNT engineered feature rows.$(RESET)"
@@ -231,55 +239,55 @@ verify health: ## Automatically validate all 6 stages of the data pipeline end-t
 ingest: ## Trigger the Python Kiva API ingestion script inside the Airflow worker
 	@echo -e "$(CYAN)[*] Triggering manual API ingestion into PostgreSQL...$(RESET)"
 	@docker exec -e DB_HOST=postgres -e DB_PORT=5432 -e DB_USER=$(PG_USER) -e DB_PASS=$(PG_PASS) -e DB_NAME=$(PG_DB) \
-		inkomoko_airflow python /opt/airflow/src/ingest_api.py
+		kiva_airflow python /opt/airflow/src/ingest_api.py
 	@echo -e "$(GREEN)[✓] Ingestion complete.$(RESET)"
 
 .PHONY: dbt-run
 dbt-run: ## Execute dbt run in ClickHouse, then regenerate the live docs catalog
 	@echo -e "$(CYAN)[*] Executing dbt models across ClickHouse...$(RESET)"
-	@docker exec -w /usr/app inkomoko_dbt dbt run
+	@docker exec -w /usr/app kiva_dbt dbt run
 	@echo -e "$(CYAN)[*] Refreshing dbt docs after model changes...$(RESET)"
-	@docker exec -w /usr/app inkomoko_dbt dbt docs generate
+	@docker exec -w /usr/app kiva_dbt dbt docs generate
 	@echo -e "$(GREEN)[✓] dbt models built successfully. Docs live at: $(CYAN)http://localhost:8081$(RESET)"
 
 .PHONY: dbt-test
 dbt-test: ## Execute dbt data quality and schema assertions
 	@echo -e "$(CYAN)[*] Running dbt test assertions...$(RESET)"
-	@docker exec -w /usr/app inkomoko_dbt dbt test
+	@docker exec -w /usr/app kiva_dbt dbt test
 	@echo -e "$(GREEN)[✓] All dbt data quality tests passed.$(RESET)"
 
 .PHONY: dbt-freshness
 dbt-freshness: ## Check dbt source freshness (loaded_at thresholds from src_kiva.yml)
 	@echo -e "$(CYAN)[*] Checking dbt source data freshness...$(RESET)"
-	@docker exec -w /usr/app inkomoko_dbt dbt source freshness
+	@docker exec -w /usr/app kiva_dbt dbt source freshness
 	@echo -e "$(GREEN)[✓] All sources are within freshness thresholds.$(RESET)"
 
 .PHONY: dbt-docs
 dbt-docs: ## Regenerate dbt docs and display local browser URL
 	@echo -e "$(CYAN)[*] Regenerating dbt documentation catalog...$(RESET)"
-	@docker exec -w /usr/app inkomoko_dbt dbt docs generate
+	@docker exec -w /usr/app kiva_dbt dbt docs generate
 	@echo -e "$(GREEN)[✓] dbt docs generated. View live at: $(CYAN)http://localhost:8081$(RESET)"
 
 .PHONY: airflow-run airflow-trigger
 airflow-run airflow-trigger: ## Trigger the end-to-end Airflow pipeline DAG immediately via CLI
-	@echo -e "$(CYAN)[*] Triggering Airflow inkomoko_kiva_pipeline DAG run...$(RESET)"
-	@docker exec inkomoko_airflow airflow dags trigger inkomoko_kiva_pipeline
+	@echo -e "$(CYAN)[*] Triggering Airflow kiva_cdc_pipeline DAG run...$(RESET)"
+	@docker exec kiva_airflow airflow dags trigger kiva_cdc_pipeline
 
 ##@ Interactive Shells & Logs
 .PHONY: psql
 psql: ## Open an interactive psql session to the PostgreSQL OLTP database
 	@echo -e "$(CYAN)[*] Connecting to PostgreSQL ($(PG_DB))...$(RESET)"
-	@docker exec -it inkomoko_postgres psql -U $(PG_USER) -d $(PG_DB)
+	@docker exec -it kiva_postgres psql -U $(PG_USER) -d $(PG_DB)
 
 .PHONY: clickhouse-cli ch-cli
 clickhouse-cli ch-cli: ## Open an interactive clickhouse-client shell to ClickHouse
 	@echo -e "$(CYAN)[*] Connecting to ClickHouse client...$(RESET)"
-	@docker exec -it inkomoko_clickhouse clickhouse-client --user $(CH_USER) --password $(CH_PASS)
+	@docker exec -it kiva_clickhouse clickhouse-client --user $(CH_USER) --password $(CH_PASS)
 
 .PHONY: redpanda-cli rpk
 redpanda-cli rpk: ## List streaming topics in Redpanda via native rpk CLI
 	@echo -e "$(CYAN)[*] Inspecting Redpanda cluster topics...$(RESET)"
-	@docker exec -it inkomoko_redpanda rpk topic list
+	@docker exec -it kiva_redpanda rpk topic list
 
 .PHONY: logs
 logs: ## Follow logs for all containers or a specific service (e.g. make logs svc=cdc-monitor)
@@ -298,7 +306,7 @@ test: ## Run local Python unit tests for ingestion and cdc-monitor
 	elif command -v pytest > /dev/null 2>&1; then \
 		pytest tests/ -v; \
 	else \
-		docker exec inkomoko_airflow pytest tests/ -v 2>/dev/null || \
+		docker exec kiva_airflow pytest tests/ -v 2>/dev/null || \
 		echo -e "$(YELLOW)[!] pytest not found locally. Install via: pip install pytest$(RESET)"; \
 	fi
 
@@ -317,7 +325,7 @@ lint: ## Run flake8 syntax and styling checks across the repository
 .PHONY: simulate-failure
 simulate-failure: ## Simulate a CDC failure by stopping Debezium (triggers Grafana & Mailpit alerts)
 	@echo -e "$(BOLD)$(RED)[*] Simulating CDC Failure: Stopping Debezium container...$(RESET)"
-	@docker stop inkomoko_debezium
+	@docker stop kiva_debezium
 	@echo -e "$(YELLOW)[i] Debezium is stopped.$(RESET)"
 	@echo -e "    Within 2-3 minutes, Grafana will fire the $(BOLD)'debezium-connector-down'$(RESET) alert."
 	@echo -e "    Check your Mailpit inbox at: $(CYAN)http://localhost:8025$(RESET)"
@@ -325,7 +333,7 @@ simulate-failure: ## Simulate a CDC failure by stopping Debezium (triggers Grafa
 .PHONY: simulate-recovery
 simulate-recovery: ## Recover from simulated failure by restarting Debezium (resolves alerts)
 	@echo -e "$(BOLD)$(GREEN)[*] Recovering CDC Service: Starting Debezium container...$(RESET)"
-	@docker start inkomoko_debezium
+	@docker start kiva_debezium
 	@echo -e "$(GREEN)[✓] Debezium restarted.$(RESET)"
 	@echo -e "    Within 1-2 minutes, Grafana will evaluate the recovered state and send"
 	@echo -e "    a $(BOLD)'[RESOLVED]'$(RESET) notification to Mailpit: $(CYAN)http://localhost:8025$(RESET)"

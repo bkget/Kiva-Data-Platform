@@ -4,7 +4,7 @@ models:
   - name: stg_kiva_loans
     description: "Cleaned and deduplicated loans data from Kiva CDC stream"
     meta:
-      owner: "data_engineering@inkomoko.com"
+      owner: "data_engineering@kiva-platform.local"
     columns:
       - name: loan_id
         description: "The primary key for the loan"
@@ -32,7 +32,7 @@ models:
   - name: int_loans_enriched
     description: "Intermediate model applying funding tiers and percentages"
     meta:
-      owner: "analytics@inkomoko.com"
+      owner: "analytics@kiva-platform.local"
     columns:
       - name: funding_tier
         description: "Business categorization of how close a loan is to being funded"
@@ -44,7 +44,7 @@ models:
   - name: mart_loans_by_sector
     description: "Aggregated metrics by country and sector for dashboarding"
     meta:
-      owner: "leadership@inkomoko.com"
+      owner: "leadership@kiva-platform.local"
     columns:
       - name: country
         tests:
@@ -56,7 +56,7 @@ models:
   - name: mart_loan_features_ml
     description: "Machine Learning feature store producing normalized, encoded, and labeled datasets"
     meta:
-      owner: "ml_engineering@inkomoko.com"
+      owner: "ml_engineering@kiva-platform.local"
     columns:
       - name: loan_id
         tests:

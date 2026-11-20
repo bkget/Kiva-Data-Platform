@@ -8,11 +8,11 @@ from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.sensors.python import PythonSensor
 
-log = logging.getLogger("inkomoko_pipeline")
+log = logging.getLogger("kiva_pipeline")
 
 # Default arguments applied to all tasks
 default_args = {
-    "owner": "inkomoko",
+    "owner": "data-engineering",
     "depends_on_past": False,
     "email_on_failure": False,
     "email_on_retry": False,
@@ -79,14 +79,14 @@ def _cdc_caught_up() -> bool:
 # The 15-minute schedule matches the production SLA: frequent enough to keep
 # Kiva loan data close to real-time without hammering the public API.
 with DAG(
-    dag_id="inkomoko_kiva_pipeline",
+    dag_id="kiva_cdc_pipeline",
     default_args=default_args,
     description="Polls Kiva API into Postgres, awaits CDC catch-up, then executes dbt models in ClickHouse",
     schedule_interval="*/15 * * * *",
     start_date=datetime(2026, 1, 1),
     catchup=False,
     max_active_runs=1,
-    tags=["inkomoko", "cdc", "dbt", "kiva"],
+    tags=["kiva", "cdc", "dbt", "microfinance"],
 ) as dag:
 
     # Task 1: Fetch loans from Kiva API and upsert into PostgreSQL OLTP database
@@ -127,7 +127,13 @@ with DAG(
     dbt_task = BashOperator(
         task_id="dbt_analytics_models",
         bash_command=(
-            "mkdir -p /opt/airflow/dbt_project/logs && "
+            # The dbt_project directory is bind-mounted and shared with the root-run
+            # `dbt` service, so anything dbt writes there can be root-owned and
+            # unwritable by the airflow user (uid 50000). Keep Airflow's dbt logs and
+            # build artifacts in Airflow's own volume instead.
+            "export DBT_LOG_PATH=/opt/airflow/dbt_artifacts/logs "
+            "DBT_TARGET_PATH=/opt/airflow/dbt_artifacts/target && "
+            "mkdir -p $DBT_LOG_PATH $DBT_TARGET_PATH && "
             "cd /opt/airflow/dbt_project && "
             "export PATH=/home/airflow/.local/bin:$PATH && "
             "dbt run --profiles-dir . && "

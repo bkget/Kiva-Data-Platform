@@ -16,12 +16,12 @@ class TestAirflowDags(unittest.TestCase):
     def test_no_import_errors(self):
         self.assertFalse(self.dagbag.import_errors, msg=self.dagbag.import_errors)
 
-    def test_inkomoko_pipeline_present(self):
-        self.assertIn("inkomoko_kiva_pipeline", self.dagbag.dags)
+    def test_kiva_pipeline_present(self):
+        self.assertIn("kiva_cdc_pipeline", self.dagbag.dags)
 
     def test_pipeline_has_cdc_gate_between_ingest_and_dbt(self):
         """Lineage must flow ingest -> CDC catch-up gate -> dbt."""
-        dag = self.dagbag.dags.get("inkomoko_kiva_pipeline")
+        dag = self.dagbag.dags.get("kiva_cdc_pipeline")
         if dag is None:
             self.skipTest("pipeline DAG not present")
         ingest = dag.get_task("ingest_kiva_api_to_postgres")

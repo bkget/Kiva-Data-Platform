@@ -1,7 +1,7 @@
 # Pipeline Scaling & Infrastructure Growth Strategy
 
 ## Overview
-This report outlines how the Inkomoko Data Platform can scale horizontally and vertically to support high-throughput data volumes (e.g. tens of millions of daily CDC transactions and real-time streaming queries).
+This report outlines how the Kiva Data Platform can scale horizontally and vertically to support high-throughput data volumes (e.g. tens of millions of daily CDC transactions and real-time streaming queries).
 
 ---
 
